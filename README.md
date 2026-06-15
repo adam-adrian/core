@@ -13,7 +13,16 @@
     <img src="https://img.shields.io/github/license/ArchiveTuneApp/core?style=for-the-badge&color=6366f1&labelColor=1e1e2e" alt="License" />
     <img src="https://img.shields.io/badge/Language-Kotlin-7f52ff?style=for-the-badge&logo=kotlin&color=6366f1&labelColor=1e1e2e" alt="Kotlin" />
     <img src="https://img.shields.io/badge/Runtime-JVM-6366f1?style=for-the-badge&logo=openjdk&labelColor=1e1e2e" alt="JVM" />
+    <img src="https://img.shields.io/github/stars/ArchiveTuneApp/core?style=for-the-badge&color=6366f1&labelColor=1e1e2e&logo=github" alt="Stars" />
   </p>
+
+  <a href="https://star-history.com/#ArchiveTuneApp/core&ArchiveTuneApp/ArchiveTune&Date">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=ArchiveTuneApp/core,ArchiveTuneApp/ArchiveTune&type=Date&theme=dark" />
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=ArchiveTuneApp/core,ArchiveTuneApp/ArchiveTune&type=Date" />
+      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=ArchiveTuneApp/core,ArchiveTuneApp/ArchiveTune&type=Date" width="600" />
+    </picture>
+  </a>
 
 </div>
 
@@ -30,6 +39,73 @@ This is the standalone InnerTube API core extracted from [ArchiveTune](https://g
 - **Proxy Rotation** — built-in rotating proxy selector with cooldown tracking for failed proxies
 - **Playback Auth** — PO token management for authenticated playback
 - **NewPipe Integration** — optional cipher deobfuscation and stream URL extraction via NewPipe Extractor
+
+## Architecture
+
+The diagram below shows how this library fits into the ArchiveTune app and how data flows through the layers.
+
+```mermaid
+flowchart TB
+    subgraph Android["ArchiveTune App (Android)"]
+        UI["Jetpack Compose UI<br/>Screens & Components"]
+        VM["ViewModels<br/>State holders"]
+        SVC["Services<br/>MusicService, Player"]
+        DB["Room Database<br/>Local cache"]
+    end
+
+    subgraph Core["core (this library)"]
+        YT["YouTube.kt<br/>High-level API singleton"]
+        IT["InnerTube.kt<br/>Ktor HTTP client"]
+        MB["MusicBackend.kt<br/>API contract"]
+
+        subgraph Models["Models"]
+            REQ["Request bodies<br/>(SearchBody, PlayerBody, ...)"]
+            RES["Response models<br/>(PlayerResponse, BrowseResponse, ...)"]
+        end
+
+        subgraph Pages["Pages"]
+            PARSERS["Page parsers<br/>(AlbumPage, ArtistPage, SearchPage, ...)"]
+        end
+
+        subgraph Proxy["Proxy"]
+            RPS["RotatingProxySelector<br/>IP rotation with cooldown"]
+            RPC["RotatingProxyClient<br/>Proxy list fetcher"]
+        end
+
+        AUTH["PlaybackAuthState<br/>PO token & cookie management"]
+        UTILS["Utils"]
+    end
+
+    subgraph External["External"]
+        YTM["YouTube Music<br/>InnerTube API"]
+        NEWPIPE["NewPipe Extractor<br/>Cipher / stream URL"]
+        BANDCAMP["Bandcamp / SoundCloud<br/>(via NewPipe)"]
+    end
+
+    UI --> VM --> SVC
+    SVC --> YT
+    YT --> IT
+    YT --> MB
+    MB --> IT
+    IT --> Models
+    IT --> Pages
+    IT --> AUTH
+    IT --> Proxy
+    IT --> UTILS
+    IT -->|HTTP / Ktor| YTM
+    IT -->|Stream decryption| NEWPIPE
+    NEWPIPE --> BANDCAMP
+    VM --> DB
+```
+
+**Data flow:**
+1. User interacts with ArchiveTune's Compose UI
+2. ViewModels & Services call `YouTube.*` methods
+3. `YouTube` delegates to `InnerTube` via the `MusicBackend` interface
+4. `InnerTube` builds signed requests, sends them via Ktor to YouTube Music's InnerTube API
+5. Raw JSON responses are deserialized into typed response models
+6. Page parsers transform structured responses into domain page objects
+7. For playback, stream URLs are decrypted via NewPipe Extractor (optional)
 
 ## Package Structure
 
