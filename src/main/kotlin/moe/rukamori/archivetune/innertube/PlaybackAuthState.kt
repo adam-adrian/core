@@ -94,8 +94,30 @@ private fun String?.normalizeAuthValue(): String? {
 }
 
 private fun String?.normalizeDataSyncId(): String? {
-    val normalized = this.normalizeAuthValue() ?: return null
+    val normalized = this.normalizeAuthValue()?.decodePercentEscapes() ?: return null
     return normalized.takeIf { !it.contains("||") }
         ?: normalized.takeIf { it.endsWith("||") }?.substringBefore("||")
         ?: normalized.substringAfter("||")
+}
+
+private fun String.decodePercentEscapes(): String {
+    if (!contains('%')) return this
+
+    val builder = StringBuilder(length)
+    var index = 0
+    while (index < length) {
+        val char = this[index]
+        if (char == '%' && index + 2 < length) {
+            val high = Character.digit(this[index + 1], 16)
+            val low = Character.digit(this[index + 2], 16)
+            if (high >= 0 && low >= 0) {
+                builder.append(((high shl 4) + low).toChar())
+                index += 3
+                continue
+            }
+        }
+        builder.append(char)
+        index += 1
+    }
+    return builder.toString()
 }
